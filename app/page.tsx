@@ -3,62 +3,15 @@ import SearchBar from './SearchBar';
 import Pagination from './Pagination';
 import BookCover from './BookCover';
 import FavoriteButton from './FavoriteButton';
+import ProgressBar from './ProgressBar';
 import { getCoverUrl } from './lib/librivox';
-
-type Author = {
-  id: string;
-  first_name: string;
-  last_name: string;
-};
-
-type Audiobook = {
-  id: string;
-  title: string;
-  description: string;
-  language: string;
-  authors: Author[];
-  url_librivox: string;
-  url_zip_file: string;
-  totaltime: string;
-};
-
-type ApiResponse = {
-  books: Audiobook[];
-};
+import { searchBooks } from './lib/catalog';
 
 const PAGE_SIZE = 12;
 
-async function getBooks(
-  query: string,
-  page: number
-): Promise<{ books: Audiobook[]; hasNext: boolean; error: boolean }> {
-  const offset = (page - 1) * PAGE_SIZE;
-  const fetchLimit = PAGE_SIZE + 1;
-
-  let url: string;
-  if (query) {
-    const encoded = encodeURIComponent(query);
-    url = `https://librivox.org/api/feed/audiobooks/title/^${encoded}?format=json&extended=1&limit=${fetchLimit}&offset=${offset}`;
-  } else {
-    url = `https://librivox.org/api/feed/audiobooks/?format=json&extended=1&limit=${fetchLimit}&offset=${offset}`;
-  }
-
-  try {
-    const res = await fetch(url, { next: { revalidate: 3600 } });
-    if (res.status === 404) return { books: [], hasNext: false, error: false };
-    if (!res.ok) return { books: [], hasNext: false, error: true };
-
-    const data: ApiResponse = await res.json();
-    const allBooks = data.books || [];
-    const hasNext = allBooks.length > PAGE_SIZE;
-    const books = allBooks.slice(0, PAGE_SIZE);
-    return { books, hasNext, error: false };
-  } catch {
-    return { books: [], hasNext: false, error: true };
-  }
-}
-
-function authorString(authors?: Author[]): string {
+function authorString(
+  authors?: Array<{ first_name: string; last_name: string }>
+): string {
   return (
     authors?.map((a) => `${a.first_name} ${a.last_name}`).join(', ') ||
     '저자 미상'
@@ -74,7 +27,19 @@ export default async function Home({
   const query = params.q?.trim() || '';
   const page = Math.max(1, parseInt(params.page || '1', 10) || 1);
 
-  const { books, hasNext, error } = await getBooks(query, page);
+  let books: Awaited<ReturnType<typeof searchBooks>>['books'] = [];
+  let hasNext = false;
+  let total = 0;
+  let error = false;
+
+  try {
+    const result = await searchBooks(query, page, PAGE_SIZE);
+    books = result.books;
+    hasNext = result.hasNext;
+    total = result.total;
+  } catch {
+    error = true;
+  }
 
   return (
     <main className="min-h-screen bg-[#F5EFE6]">
@@ -86,7 +51,7 @@ export default async function Home({
           <div className="flex items-center justify-center gap-3">
             <div className="h-px w-16 bg-[#B8923D]"></div>
             <span className="text-[#8B6F47] text-xs tracking-[0.3em] uppercase">
-              Free Audiobooks
+              {total > 0 && !query ? `${total.toLocaleString()} Audiobooks` : 'Free Audiobooks'}
             </span>
             <div className="h-px w-16 bg-[#B8923D]"></div>
           </div>
@@ -96,8 +61,8 @@ export default async function Home({
 
         {query && !error && books.length > 0 && (
           <p className="text-center text-[#8B6F47] mb-8 italic">
-            <span className="text-[#B8923D] font-semibold">'{query}'</span>
-            (으)로 시작하는 책 검색 결과
+            <span className="text-[#B8923D] font-semibold">'{query}'</span>{' '}
+            검색 결과 {total.toLocaleString()}권
           </p>
         )}
 
@@ -107,7 +72,7 @@ export default async function Home({
               📚 도서관이 잠시 문을 닫았어요
             </p>
             <p className="text-[#8B6F47] mb-6">
-              LibriVox 서버에 일시적으로 연결할 수 없어요.
+              일시적으로 책 목록을 불러올 수 없어요.
             </p>
             <Link
               href="/"
@@ -122,7 +87,7 @@ export default async function Home({
               📭 검색 결과가 없어요
             </p>
             <p className="text-[#8B6F47]">
-              제목의 시작 글자로 검색됩니다. 다른 단어로 시도해보세요.
+              다른 단어로 시도해보세요. 제목, 작가, 설명에서 모두 검색됩니다.
             </p>
             <Link
               href="/"
@@ -157,6 +122,7 @@ export default async function Home({
                           coverUrl,
                         }}
                       />
+                      <ProgressBar bookId={book.id} />
                     </div>
                     <div className="p-4">
                       <h2 className="font-serif text-base font-semibold text-[#3D2817] mb-1 line-clamp-2 group-hover:text-[#9A7A2E] transition-colors leading-snug">

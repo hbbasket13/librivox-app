@@ -30,7 +30,7 @@ export default function SearchBar() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="책 제목으로 검색하기 (예: Pride, Sherlock)..."
+          placeholder="제목, 작가, 키워드 검색 (예: Sherlock, Doyle, mystery)"
           className="w-full px-5 py-3 pr-24 bg-[#FFFBF5] border-2 border-[#E8D7B7] rounded-lg text-[#3D2817] placeholder-[#A89072] focus:outline-none focus:border-[#B8923D] transition-colors shadow-[0_2px_8px_rgba(120,80,40,0.06)]"
         />
         {query && (
@@ -50,9 +50,6 @@ export default function SearchBar() {
           검색
         </button>
       </div>
-      <p className="text-xs text-[#A89072] mt-2 text-center italic">
-        💡 제목 시작 글자로 검색합니다 (LibriVox API 제약사항)
-      </p>
     </form>
   );
 }
